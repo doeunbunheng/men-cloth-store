@@ -36,18 +36,31 @@ export default function AdminDashboard() {
     const [products,setProducts]= useState([]);
     const navigate = useNavigate();
 
+    // FIX #2: each API call has its own .catch() so one failure doesn't break the whole page
     useEffect(() => {
-        getOrders().then(r   => setOrders(r.data));
-        getSalesLog().then(r => setLogs(r.data));
-        getUsers().then(r    => setUsers(r.data));
-        getProducts().then(r => setProducts(r.data));
+        getOrders()
+            .then(r => setOrders(r.data || []))
+            .catch(err => console.error('Failed to load orders:', err));
+
+        getSalesLog()
+            .then(r => setLogs(r.data || []))
+            .catch(err => console.error('Failed to load sales log:', err));
+
+        getUsers()
+            .then(r => setUsers(r.data || []))
+            .catch(err => console.error('Failed to load users:', err));
+
+        getProducts()
+            .then(r => setProducts(r.data || []))
+            .catch(err => console.error('Failed to load products:', err));
     }, []);
 
+    // FIX #3: wrap TOTAL_AMOUNT in Number() so Oracle string values don't break the math
     const totalRev = orders
         .filter(o => o.STATUS !== 'Cancelled')
-        .reduce((s, o) => s + (o.TOTAL_AMOUNT || 0), 0)
+        .reduce((acc, o) => acc + Number(o.TOTAL_AMOUNT || 0), 0);
     const cancelCount = orders.filter(o => o.STATUS === 'Cancelled').length;
-    const lowStock  = products.filter(p => p.STOCK_QTY < 10).length;
+    const lowStock  = products.filter(p => Number(p.STOCK_QTY) < 10).length;
 
     return (
         <div>
@@ -65,7 +78,7 @@ export default function AdminDashboard() {
                 + New Order
             </button>
             <button style={s.navbtn} onClick={() => navigate('/admin/backup')}>
-                🗄️ Backup DB
+                 Backup DB
             </button>
 
             {/* Stats */}
@@ -73,27 +86,27 @@ export default function AdminDashboard() {
                 <div style={s.stat}><div style={s.num}>{orders.length}</div><div style={s.lbl}>Total orders</div></div>
                 <div style={s.stat}><div style={s.num}>{users.length}</div><div style={s.lbl}>Registered users</div></div>
                 <div style={s.stat}>
-    <div style={s.num}>${totalRev.toFixed(2)}</div>
-    <div style={s.lbl}>Total revenue</div>
-    {cancelCount > 0 && (
-        <div style={{ fontSize:11, color:'#dc2626', marginTop:4 }}>
-            {cancelCount} cancelled order{cancelCount>1?'s':''} excluded
-        </div>
-    )}
-</div>
+                    <div style={s.num}>${totalRev.toFixed(2)}</div>
+                    <div style={s.lbl}>Total revenue</div>
+                    {cancelCount > 0 && (
+                        <div style={{ fontSize:11, color:'#dc2626', marginTop:4 }}>
+                            {cancelCount} cancelled order{cancelCount>1?'s':''} excluded
+                        </div>
+                    )}
+                </div>
                 <div style={{ ...s.stat, cursor: lowStock > 0 ? 'pointer' : 'default',
-              border: lowStock > 0 ? '1px solid #fecaca' : '1px solid #e5e7eb' }}
-     onClick={() => lowStock > 0 && navigate('/admin/low-stock')}>
-    <div style={{ ...s.num, color: lowStock > 0 ? '#dc2626' : '#4f46e5' }}>
-        {lowStock}
-    </div>
-    <div style={s.lbl}>Low stock items</div>
-    {lowStock > 0 && (
-        <div style={{ fontSize:11, color:'#dc2626', marginTop:4 }}>
-            Click to view →
-        </div>
-    )}
-</div>
+                      border: lowStock > 0 ? '1px solid #fecaca' : '1px solid #e5e7eb' }}
+                     onClick={() => lowStock > 0 && navigate('/admin/low-stock')}>
+                    <div style={{ ...s.num, color: lowStock > 0 ? '#dc2626' : '#4f46e5' }}>
+                        {lowStock}
+                    </div>
+                    <div style={s.lbl}>Low stock items</div>
+                    {lowStock > 0 && (
+                        <div style={{ fontSize:11, color:'#dc2626', marginTop:4 }}>
+                            Click to view →
+                        </div>
+                    )}
+                </div>
             </div>
 
             <div style={s.row}>
@@ -112,7 +125,12 @@ export default function AdminDashboard() {
                                 <tr key={o.ORDER_ID}>
                                     <td style={s.td}>#{o.ORDER_ID}</td>
                                     <td style={s.td}>{o.CUSTOMER_NAME}</td>
-                                    <td style={s.td}>${o.TOTAL_AMOUNT ?? '—'}</td>
+                                    {/* FIX #3 (cont.): format as number with 2 decimals */}
+                                    <td style={s.td}>
+                                        {o.TOTAL_AMOUNT != null
+                                            ? `$${Number(o.TOTAL_AMOUNT).toFixed(2)}`
+                                            : '—'}
+                                    </td>
                                     <td style={s.td}>{o.STATUS}</td>
                                 </tr>
                             ))}

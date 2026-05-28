@@ -66,7 +66,7 @@ function OrderItems({ orderId }) {
                                        onError={e => { e.target.style.display='none' }} />
                                 : <div style={{ width:'100%', height:'100%', display:'flex',
                                                 alignItems:'center', justifyContent:'center',
-                                                fontSize:24 }}>👔</div>}
+                                                fontSize:24 }}></div>}
                         </div>
 
                         {/* Product info */}
@@ -178,12 +178,12 @@ function OrderCard({ order }) {
                     <div style={{ display:'flex', gap:16, flexWrap:'wrap' }}>
                         <span style={{ fontSize:13, color:'#64748b',
                                        display:'flex', alignItems:'center', gap:4 }}>
-                            📅 {order.ORDER_DATE}
+                             {order.ORDER_DATE}
                         </span>
                         {order.SOLD_BY && (
                             <span style={{ fontSize:13, color:'#64748b',
                                            display:'flex', alignItems:'center', gap:4 }}>
-                                👤 Served by <b style={{ color:'#475569' }}>{order.SOLD_BY}</b>
+                                 Served by <b style={{ color:'#475569' }}>{order.SOLD_BY}</b>
                             </span>
                         )}
                     </div>
@@ -294,7 +294,7 @@ export default function MyOrders() {
                       borderRadius:20, border:'1px solid #e2e8f0',
                       maxWidth:400, margin:'40px auto',
                       fontFamily:"'DM Sans',sans-serif" }}>
-            <div style={{ fontSize:48, marginBottom:16 }}>⚠️</div>
+            <div style={{ fontSize:48, marginBottom:16 }}></div>
             <h2 style={{ fontSize:18, fontWeight:700, color:'#0f172a', marginBottom:8 }}>
                 Session expired
             </h2>

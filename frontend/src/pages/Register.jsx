@@ -54,7 +54,7 @@ export default function Register() {
                               backdropFilter:'blur(10px)',
                               border:'1px solid rgba(255,255,255,.12)',
                               borderRadius:50, padding:'10px 20px', width:'fit-content' }}>
-                    <span style={{ fontSize:22 }}>👔</span>
+                    <span style={{ fontSize:22 }}></span>
                     <div>
                         <div style={{ fontSize:15, fontWeight:700, color:'#fff' }}>Men's Store</div>
                         <div style={{ fontSize:10, color:'rgba(255,255,255,.5)',
@@ -81,10 +81,10 @@ export default function Register() {
                     {/* Benefits */}
                     <div style={{ display:'flex', flexDirection:'column', gap:14, marginTop:36 }}>
                         {[
-                            ['🛒', 'Easy cart & checkout'],
-                            ['📦', 'Track your orders'],
-                            ['🔒', 'Secure & private'],
-                            ['💳', 'Multiple payment options'],
+                            ['', 'Easy cart & checkout'],
+                            ['', 'Track your orders'],
+                            ['', 'Secure & private'],
+                            ['', 'Multiple payment options'],
                         ].map(([icon, text]) => (
                             <div key={text} style={{ display:'flex', alignItems:'center', gap:14 }}>
                                 <div style={{ width:38, height:38,

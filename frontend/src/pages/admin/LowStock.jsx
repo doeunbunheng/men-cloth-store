@@ -88,7 +88,7 @@ export default function LowStock() {
                           alignItems:'flex-start', marginBottom:24 }}>
                 <div>
                     <h1 style={{ fontSize:26, fontWeight:600, color:'#0f172a', marginBottom:4 }}>
-                        📦 Low Stock Alert
+                         Low Stock Alert
                     </h1>
                     <p style={{ fontSize:14, color:'#64748b' }}>
                         {items.length} products need attention
@@ -170,7 +170,7 @@ export default function LowStock() {
                 <div style={{ textAlign:'center', padding:'60px 20px',
                               background:'#fff', borderRadius:14,
                               border:'1px solid #e2e8f0' }}>
-                    <div style={{ fontSize:48, marginBottom:12 }}>✅</div>
+                    <div style={{ fontSize:48, marginBottom:12 }}></div>
                     <div style={{ fontSize:16, fontWeight:500, color:'#0f172a' }}>
                         No products in this category
                     </div>

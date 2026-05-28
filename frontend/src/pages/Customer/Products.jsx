@@ -147,7 +147,7 @@ function ProductModal({ product, onClose, onAddToCart, cartItems }) {
                         ) : (
                             <div style={{ position:"absolute", inset:0, display:"flex",
                                           alignItems:"center", justifyContent:"center",
-                                          fontSize:80 }}>👔</div>
+                                          fontSize:80 }}></div>
                         )}
 
                         {/* Top badges */}
@@ -392,7 +392,7 @@ function ProductModal({ product, onClose, onAddToCart, cartItems }) {
                                               borderRadius:10, padding:"10px 14px",
                                               fontSize:12, color:"#92400e",
                                               marginBottom:12, fontWeight:500 }}>
-                                    👆 Please select a size to continue
+                                     Please select a size to continue
                                 </div>
                             )}
 
@@ -662,7 +662,7 @@ function CartSidebar({ cart, onClose, onRemove, onQtyChange, onPlaceOrder, placi
                                                  display:'flex', alignItems:'center',
                                                  justifyContent:'center', gap:6,
                                                  background: isEditing ? '#f0edff' : 'transparent' }}>
-                                        ✏️ {isEditing ? 'Close editor' : 'Change size / color'}
+                                         {isEditing ? 'Close editor' : 'Change size / color'}
                                         <span style={{ fontSize:10, color:'#94a3b8' }}>
                                             {isEditing ? '▲' : '▼'}
                                         </span>

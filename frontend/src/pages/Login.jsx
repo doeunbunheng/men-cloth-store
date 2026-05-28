@@ -86,7 +86,7 @@ export default function Login() {
                                   backdropFilter:'blur(10px)',
                                   border:'1px solid rgba(255,255,255,.15)',
                                   borderRadius:50, padding:'10px 20px' }}>
-                        <span style={{ fontSize:22 }}>👔</span>
+                        <span style={{ fontSize:22 }}></span>
                         <div>
                             <div style={{ fontSize:16, fontWeight:700, color:'#fff',
                                           lineHeight:1 }}>Men's Store</div>
@@ -222,7 +222,7 @@ export default function Login() {
                             e.currentTarget.style.background='rgba(255,255,255,.06)'
                             e.currentTarget.style.color='rgba(255,255,255,.7)'
                         }}>
-                        👔 Browse products without signing in
+                         Browse products without signing in
                     </Link>
                 </div>
 

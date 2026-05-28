@@ -207,7 +207,7 @@ export default function ManageProducts() {
                                   padding:24, marginBottom: showVariants ? 16 : 0 }}>
                         <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:20 }}>
                             <span style={{ fontSize:15, fontWeight:600, color:'#0f172a' }}>
-                                {editId ? '✏️ Edit Product' : '+ Add New Product'}
+                                {editId ? ' Edit Product' : '+ Add New Product'}
                             </span>
                             {editId && <button onClick={cancelEdit}
                                 style={{ background:'none', border:'none', color:'#94a3b8', cursor:'pointer', fontSize:13 }}>✕ Cancel</button>}
@@ -345,7 +345,7 @@ export default function ManageProducts() {
                             {/* Add/Edit variant */}
                             <div style={{ background:'#f8fafc', borderRadius:10, padding:14 }}>
                                 <div style={{ fontSize:12, fontWeight:600, color:'#475569', marginBottom:10 }}>
-                                    {editVarId ? '✏️ Edit variant' : '+ Add variant'}
+                                    {editVarId ? ' Edit variant' : '+ Add variant'}
                                 </div>
                                 <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 80px', gap:8 }}>
                                     <div>

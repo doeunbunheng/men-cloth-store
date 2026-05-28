@@ -8,14 +8,15 @@ venv/
 env/
 .venv/
 backend/venv/
-backend/env/
+backend/.env/
 backend/.venv/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
 .coverage
 htmlcov/
-
+.env
+*.env
 # Django project files
 db.sqlite3
 backend/db.sqlite3

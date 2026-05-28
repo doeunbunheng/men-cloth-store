@@ -1,5 +1,6 @@
 import oracledb
 from django.conf import settings
+from django.contrib.auth.hashers import make_password, check_password
 
 
 def get_connection():
@@ -330,3 +331,24 @@ def get_sales_log():
     rows = fetchall_as_dict(cursor)
     cursor.close(); conn.close()
     return rows
+
+
+
+def hash_password(raw_password: str) -> str:
+    """Hash a plain password using Django's PBKDF2 hasher."""
+    return make_password(raw_password)
+
+
+def verify_password(raw_password: str, hashed_password: str) -> bool:
+    """Check a plain password against a stored hash."""
+    return check_password(raw_password, hashed_password)
+
+
+def format_currency(amount, currency='USD'):
+    """Format a number as currency (basic version)."""
+    if amount is None:
+        return ''
+    try:
+        return f"{currency} {float(amount):,.2f}"
+    except (TypeError, ValueError):
+        return str(amount)

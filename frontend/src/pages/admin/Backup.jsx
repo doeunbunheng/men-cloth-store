@@ -2,9 +2,9 @@ import { useEffect, useState } from 'react'
 import API from '../../api'
 
 const TABLE_ICONS = {
-    USERS: '👤', CUSTOMERS: '🧑', PRODUCTS: '👔',
-    PRODUCT_VARIANTS: '📦', ORDERS: '🛒',
-    ORDER_ITEMS: '📋', SALES_LOG: '📊'
+    USERS: '', CUSTOMERS: '', PRODUCTS: '',
+    PRODUCT_VARIANTS: '', ORDERS: '🛒',
+    ORDER_ITEMS: '', SALES_LOG: ''
 }
 
 export default function Backup() {
@@ -76,7 +76,7 @@ export default function Backup() {
             <div style={{ marginBottom:28 }}>
                 <h1 style={{ fontSize:26, fontWeight:700, color:'#0f172a', marginBottom:4,
                               display:'flex', alignItems:'center', gap:10 }}>
-                    🗄️ Database Backup
+                     Database Backup
                 </h1>
                 <p style={{ fontSize:14, color:'#64748b' }}>
                     Export all database tables as a downloadable backup file
@@ -189,7 +189,7 @@ export default function Backup() {
                                       borderRadius:14, overflow:'hidden', marginTop:20 }}>
                             <div style={{ padding:'14px 20px', borderBottom:'1px solid #f1f5f9',
                                           fontSize:13, fontWeight:600, color:'#0f172a' }}>
-                                📥 Recent Backups (this session)
+                                 Recent Backups (this session)
                             </div>
                             {history.map(h => (
                                 <div key={h.id}
@@ -197,7 +197,7 @@ export default function Backup() {
                                              padding:'12px 20px',
                                              borderTop:'1px solid #f8fafc' }}>
                                     <div style={{ fontSize:20 }}>
-                                        {h.type==='SQL' ? '🗃️' : '📋'}
+                                        {h.type==='SQL' ? '' : ''}
                                     </div>
                                     <div style={{ flex:1 }}>
                                         <div style={{ fontSize:13, fontWeight:500,
@@ -239,8 +239,8 @@ export default function Backup() {
                             </div>
                             <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
                                 {[
-                                    ['sql', '🗃️', 'SQL File', 'Oracle INSERT statements\nRun directly in SQL Developer'],
-                                    ['json','📋', 'JSON File', 'Structured data format\nEasy to read and import'],
+                                    ['sql', '', 'SQL File', 'Oracle INSERT statements\nRun directly in SQL Developer'],
+                                    ['json','', 'JSON File', 'Structured data format\nEasy to read and import'],
                                 ].map(([val, icon, label, desc]) => (
                                     <div key={val}
                                         onClick={() => setBackupType(val)}
@@ -284,7 +284,7 @@ export default function Backup() {
                         <div style={{ background:'#fffbeb', border:'1px solid #fde68a',
                                       borderRadius:10, padding:'10px 14px', marginBottom:20,
                                       fontSize:12, color:'#92400e' }}>
-                            ⚠️ Store backup files securely. They contain user passwords and personal data.
+                             Store backup files securely. They contain user passwords and personal data.
                         </div>
 
                         {/* Backup button */}
@@ -299,8 +299,8 @@ export default function Backup() {
                                      boxShadow:(backing||loading)?'none':'0 4px 16px rgba(79,70,229,.35)',
                                      transition:'all .2s' }}>
                             {backing
-                                ? '⏳ Generating backup...'
-                                : `⬇️ Download ${backupType.toUpperCase()} Backup`}
+                                ? ' Generating backup...'
+                                : `⬇ Download ${backupType.toUpperCase()} Backup`}
                         </button>
 
                         <p style={{ fontSize:11, color:'#94a3b8', textAlign:'center',
