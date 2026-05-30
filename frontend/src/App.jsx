@@ -11,8 +11,6 @@ import ManageProducts   from './pages/admin/ManageProducts'
 import LowStock         from './pages/admin/LowStock'
 import Navbar           from './components/Navbar'
 import Backup from './pages/admin/Backup'
-import Audit from './pages/admin/Audit'
-
 
 
 
@@ -68,8 +66,6 @@ export default function App() {
                         <PrivateRoute roles={['Admin','Sale']}><LowStock /></PrivateRoute>} />
                     <Route path="/admin/backup" element={
                         <PrivateRoute roles={['Admin']}><Backup /></PrivateRoute>} />
-                    <Route path="/admin/audit" element={
-                        <PrivateRoute roles={['Admin']}><Audit /></PrivateRoute>} />
                 </Routes>
             </div>
         </BrowserRouter>

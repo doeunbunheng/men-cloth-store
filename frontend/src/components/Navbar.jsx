@@ -236,7 +236,6 @@ export default function Navbar() {
                         <NavLink to="/admin/users"        style={s.link}>Users</NavLink>
                         <NavLink to="/admin/products"     style={s.link}>Product Management</NavLink>
                         <NavLink to="/admin/backup"       style={s.link}>Backup</NavLink>
-                        <NavLink to="/admin/audit"        style={s.link}>Audit</NavLink>
                     </div>
                 </>}
             </div>
