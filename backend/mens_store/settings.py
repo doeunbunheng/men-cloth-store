@@ -3,29 +3,15 @@ from datetime import timedelta
 import os
 from dotenv import load_dotenv
 
-# ============================================================
-# BASE DIRECTORY + ENV
-# ============================================================
-
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 load_dotenv(BASE_DIR / ".env")
-
-
-# ============================================================
-# DJANGO BASIC CONFIG
-# ============================================================
 
 SECRET_KEY = os.getenv("SECRET_KEY", "django-secret-key-change-in-production")
 
 DEBUG = os.getenv("DEBUG", "True") == "True"
 
 ALLOWED_HOSTS = ["*"]
-
-
-# ============================================================
-# INSTALLED APPS
-# ============================================================
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -40,11 +26,6 @@ INSTALLED_APPS = [
     "store",
 ]
 
-
-# ============================================================
-# MIDDLEWARE
-# ============================================================
-
 MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
 
@@ -57,24 +38,14 @@ MIDDLEWARE = [
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
 
-
-# ============================================================
-# URL / WSGI
-# ============================================================
-
 ROOT_URLCONF = "mens_store.urls"
 
 WSGI_APPLICATION = "mens_store.wsgi.application"
 
-
-# ============================================================
-# TEMPLATES
-# ============================================================
-
 TEMPLATES = [
     {
         "BACKEND": "django.template.backends.django.DjangoTemplates",
-        "DIRS": [],
+        "DIRS": [BASE_DIR / "templates"],
         "APP_DIRS": True,
         "OPTIONS": {
             "context_processors": [
@@ -87,32 +58,12 @@ TEMPLATES = [
     }
 ]
 
-
-# ============================================================
-# ORACLE DATABASE CONFIG
-# ============================================================
-
-# Used by store/utils.py with oracledb.connect()
-ORACLE_CONFIG = {
-    "user": os.getenv("DB_USER", "SYSTEM"),
-    "password": os.getenv("DB_PASSWORD"),
-    "dsn": os.getenv("DB_NAME", "localhost:1521/orclpdb"),
-}
-
-# Used by Django ORM/admin
 DATABASES = {
     "default": {
-        "ENGINE": "django.db.backends.oracle",
-        "NAME": os.getenv("DB_NAME", "localhost:1521/orclpdb"),
-        "USER": os.getenv("DB_USER", "SYSTEM"),
-        "PASSWORD": os.getenv("DB_PASSWORD"),
+        "ENGINE": "django.db.backends.sqlite3",
+        "NAME": BASE_DIR / "db.sqlite3",
     }
 }
-
-
-# ============================================================
-# CORS CONFIG
-# ============================================================
 
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:5173",
@@ -122,11 +73,6 @@ CORS_ALLOWED_ORIGINS = [
 ]
 
 CORS_ALLOW_CREDENTIALS = True
-
-
-# ============================================================
-# REST FRAMEWORK / JWT
-# ============================================================
 
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [],
@@ -138,11 +84,6 @@ SIMPLE_JWT = {
     "REFRESH_TOKEN_LIFETIME": timedelta(days=1),
 }
 
-
-# ============================================================
-# LANGUAGE / TIMEZONE
-# ============================================================
-
 LANGUAGE_CODE = "en-us"
 
 TIME_ZONE = "Asia/Phnom_Penh"
@@ -151,19 +92,14 @@ USE_I18N = True
 
 USE_TZ = False
 
-
-# ============================================================
-# STATIC / MEDIA FILES
-# ============================================================
-
 STATIC_URL = "static/"
+STATIC_ROOT = BASE_DIR / "staticfiles"
+
+STATICFILES_DIRS = [
+    BASE_DIR / "frontend_build",
+]
 
 MEDIA_URL = "/media/"
-MEDIA_ROOT = os.path.join(BASE_DIR, "media")
-
-
-# ============================================================
-# DEFAULT AUTO FIELD
-# ============================================================
+MEDIA_ROOT = BASE_DIR / "media"
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"

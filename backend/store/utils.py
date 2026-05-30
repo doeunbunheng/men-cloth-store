@@ -1,503 +1,383 @@
-import oracledb
-from django.conf import settings
 from django.contrib.auth.hashers import make_password, check_password
+from django.db import transaction
+from django.db.models import Sum, Q, Count, Case, When, Value, IntegerField
+from .models import Users, Products, Customers, Orders, OrderItems, SalesLog, ProductVariants
 
-
-def get_connection():
-    cfg = settings.ORACLE_CONFIG
-    return oracledb.connect(
-        user=cfg['user'], password=cfg['password'], dsn=cfg['dsn']
-    )
-
-
-def fetchall_as_dict(cursor):
-    cols = [col[0] for col in cursor.description]
-    return [dict(zip(cols, row)) for row in cursor.fetchall()]
-
-
-def fetchone_as_dict(cursor):
-    cols = [col[0] for col in cursor.description]
-    row  = cursor.fetchone()
-    return dict(zip(cols, row)) if row else None
-
-
-# ── Auth ──────────────────────────────────────────────────────
 
 def get_user_by_credentials(username, password):
-    conn   = get_connection()
-    cursor = conn.cursor()
-    cursor.execute(
-        "SELECT user_id, username, role FROM users "
-        "WHERE UPPER(username)=UPPER(:1) AND password=:2",
-        [username, password]
-    )
-    row = fetchone_as_dict(cursor)
-    cursor.close(); conn.close()
-    return row
+    try:
+        user = Users.objects.get(username__iexact=username, password=password)
+        return {
+            'USER_ID': user.user_id,
+            'USERNAME': user.username,
+            'ROLE': user.role,
+        }
+    except Users.DoesNotExist:
+        return None
 
 
 def get_user_by_id(user_id):
-    conn   = get_connection()
-    cursor = conn.cursor()
-    cursor.execute(
-        "SELECT user_id, username, role FROM users WHERE user_id=:1",
-        [int(user_id)]
-    )
-    row = fetchone_as_dict(cursor)
-    cursor.close(); conn.close()
-    return row
+    try:
+        user = Users.objects.get(user_id=user_id)
+        return {
+            'USER_ID': user.user_id,
+            'USERNAME': user.username,
+            'ROLE': user.role,
+        }
+    except Users.DoesNotExist:
+        return None
 
 
-# ── Registration ──────────────────────────────────────────────
+def get_customer_id_by_user_id(user_id):
+    try:
+        return Customers.objects.values_list('customer_id', flat=True).get(user_id=user_id)
+    except Customers.DoesNotExist:
+        return None
+
 
 def register_customer(username, password, full_name, email, phone, address):
-    conn   = get_connection()
-    cursor = conn.cursor()
-    cursor.callproc('proc_register_customer',
-                    [username, password, full_name, email, phone, address])
-    conn.commit()
-    cursor.close(); conn.close()
+    if Customers.objects.filter(email=email).exists():
+        raise Exception('Email already registered!')
+    if Users.objects.filter(username__iexact=username).exists():
+        raise Exception('Username already taken!')
 
+    user = Users.objects.create(
+        username=username,
+        password=password,
+        role='Customer',
+    )
+    Customers.objects.create(
+        user=user,
+        full_name=full_name,
+        email=email,
+        phone=phone or '',
+        address=address or '',
+    )
 
-# ── Products ──────────────────────────────────────────────────
 
 def get_all_products():
-    conn   = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT * FROM v_product_stock")
-    rows = fetchall_as_dict(cursor)
-    cursor.close(); conn.close()
-    return rows
+    return list(Products.objects.all().order_by('stock_qty').values(
+        'product_id', 'product_name', 'category',
+        'size', 'color', 'price', 'stock_qty', 'image_url'
+    ))
 
 
 def add_product(name, category, price, image_url=None):
-    conn   = get_connection()
-    cursor = conn.cursor()
-    pid_var = cursor.var(oracledb.NUMBER)
-    cursor.execute(
-        "INSERT INTO products (product_name, category, price, image_url) "
-        "VALUES (:1,:2,:3,:4) RETURNING product_id INTO :5",
-        [name, category, price, image_url, pid_var]
+    product = Products.objects.create(
+        product_name=name,
+        category=category or '',
+        price=price,
+        image_url=image_url or '',
     )
-    conn.commit()
-    pid = int(pid_var.getvalue()[0])
-    cursor.close(); conn.close()
-    return pid
+    return product.product_id
 
 
 def update_product(product_id, name, category, price, image_url=None):
-    conn   = get_connection()
-    cursor = conn.cursor()
-    cursor.execute(
-        "UPDATE products SET product_name=:1, category=:2, price=:3, image_url=:4 "
-        "WHERE product_id=:5",
-        [name, category, price, image_url, int(product_id)]
+    Products.objects.filter(product_id=product_id).update(
+        product_name=name,
+        category=category,
+        price=price,
+        image_url=image_url,
     )
-    conn.commit()
-    cursor.close(); conn.close()
 
 
 def delete_product(product_id):
-    conn   = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("DELETE FROM product_variants WHERE product_id=:1", [int(product_id)])
-    cursor.execute("DELETE FROM products WHERE product_id=:1", [int(product_id)])
-    conn.commit()
-    cursor.close(); conn.close()
+    ProductVariants.objects.filter(product_id=product_id).delete()
+    Products.objects.filter(product_id=product_id).delete()
 
-
-# ── Variants ──────────────────────────────────────────────────
 
 def get_variants(product_id):
-    conn   = get_connection()
-    cursor = conn.cursor()
-    cursor.execute(
-        "SELECT variant_id, product_id, size_, color, stock_qty "
-        "FROM product_variants WHERE product_id=:1 ORDER BY variant_id",
-        [int(product_id)]
+    return list(ProductVariants.objects.filter(product_id=product_id).order_by('variant_id').values(
+        'variant_id', 'product_id', 'size', 'color', 'stock_qty'
+    ))
+
+
+def add_variant(product_id, size, color, stock_qty):
+    ProductVariants.objects.create(
+        product_id=product_id,
+        size=size,
+        color=color,
+        stock_qty=stock_qty or 0,
     )
-    rows = fetchall_as_dict(cursor)
-    cursor.close(); conn.close()
-    return rows
+    _sync_product_stock(product_id)
 
 
-def add_variant(product_id, size_, color, stock_qty):
-    conn   = get_connection()
-    cursor = conn.cursor()
-    cursor.execute(
-        "INSERT INTO product_variants (product_id, size_, color, stock_qty) "
-        "VALUES (:1,:2,:3,:4)",
-        [int(product_id), size_, color, int(stock_qty)]
-    )
-    conn.commit()
-    cursor.close(); conn.close()
-
-
-def update_variant(variant_id, size_, color, stock_qty):
-    conn   = get_connection()
-    cursor = conn.cursor()
-    cursor.execute(
-        "UPDATE product_variants SET size_=:1, color=:2, stock_qty=:3 "
-        "WHERE variant_id=:4",
-        [size_, color, int(stock_qty), int(variant_id)]
-    )
-    conn.commit()
-    cursor.close(); conn.close()
+def update_variant(variant_id, size, color, stock_qty):
+    variant = ProductVariants.objects.get(variant_id=variant_id)
+    variant.size = size
+    variant.color = color
+    variant.stock_qty = stock_qty or 0
+    variant.save()
+    _sync_product_stock(variant.product_id)
 
 
 def delete_variant(variant_id):
-    conn   = get_connection()
-    cursor = conn.cursor()
-    cursor.execute(
-        "DELETE FROM product_variants WHERE variant_id=:1",
-        [int(variant_id)]
-    )
-    conn.commit()
-    cursor.close(); conn.close()
+    variant = ProductVariants.objects.get(variant_id=variant_id)
+    pid = variant.product_id
+    variant.delete()
+    _sync_product_stock(pid)
 
 
-# ── Orders ────────────────────────────────────────────────────
+def _sync_product_stock(product_id):
+    total = ProductVariants.objects.filter(product_id=product_id).aggregate(
+        total=Sum('stock_qty')
+    )['total'] or 0
+    Products.objects.filter(product_id=product_id).update(stock_qty=total)
+
 
 def get_all_orders():
-    conn   = get_connection()
-    cursor = conn.cursor()
-    cursor.execute(
-        "SELECT order_id, customer_name, sold_by, "
-        "order_date, status, total_amount "
-        "FROM v_sales_report ORDER BY order_id DESC"
-    )
-    rows = fetchall_as_dict(cursor)
-    cursor.close(); conn.close()
-    return rows
+    orders = Orders.objects.select_related('customer', 'user').all().order_by('-order_id')
+    result = []
+    for o in orders:
+        sold_by = None
+        log_entry = SalesLog.objects.filter(order=o, user__role__in=['Admin', 'Sale']).order_by('-log_id').first()
+        if log_entry and log_entry.user:
+            sold_by = log_entry.user.username
+        result.append({
+            'ORDER_ID': o.order_id,
+            'CUSTOMER_NAME': o.customer.full_name if o.customer else 'Unknown',
+            'SOLD_BY': sold_by,
+            'ORDER_DATE': o.order_date.strftime('%Y-%m-%d') if o.order_date else '',
+            'STATUS': o.status,
+            'TOTAL_AMOUNT': float(o.total_amount) if o.total_amount else 0,
+        })
+    return result
 
 
 def get_customer_orders(customer_id):
-    conn   = get_connection()
-    cursor = conn.cursor()
-    cursor.execute(
-        "SELECT o.order_id, "
-        "NVL(c.full_name,'Unknown') AS customer_name, "
-        "TO_CHAR(o.order_date,'YYYY-MM-DD') AS order_date, "
-        "o.status, o.total_amount, "
-        "(SELECT sub.uname FROM "
-        "  (SELECT u2.username AS uname "
-        "   FROM sales_log sl "
-        "   JOIN users u2 ON sl.user_id = u2.user_id "
-        "   WHERE sl.order_id = o.order_id "
-        "   AND u2.role IN ('Admin','Sale') "
-        "   ORDER BY sl.log_date DESC) sub "
-        " WHERE ROWNUM = 1) AS processed_by "
-        "FROM orders o "
-        "LEFT JOIN customers c ON o.customer_id = c.customer_id "
-        "WHERE o.customer_id = :1 "
-        "ORDER BY o.order_id DESC",
-        [int(customer_id)]
-    )
-    rows = fetchall_as_dict(cursor)
-    cursor.close(); conn.close()
-    return rows
+    orders = Orders.objects.filter(customer_id=customer_id).select_related('customer').order_by('-order_id')
+    result = []
+    for o in orders:
+        sold_by = None
+        log_entry = SalesLog.objects.filter(order=o, user__role__in=['Admin', 'Sale']).order_by('-log_id').first()
+        if log_entry and log_entry.user:
+            sold_by = log_entry.user.username
+        result.append({
+            'ORDER_ID': o.order_id,
+            'CUSTOMER_NAME': o.customer.full_name if o.customer else 'Unknown',
+            'ORDER_DATE': o.order_date.strftime('%Y-%m-%d') if o.order_date else '',
+            'STATUS': o.status,
+            'TOTAL_AMOUNT': float(o.total_amount) if o.total_amount else 0,
+            'PROCESSED_BY': sold_by,
+        })
+    return result
 
 
+@transaction.atomic
 def create_order(customer_id, user_id, items):
-    conn   = get_connection()
-    cursor = conn.cursor()
-
-    order_id_var = cursor.var(oracledb.NUMBER)
-    cursor.execute(
-        "INSERT INTO orders (customer_id, user_id, status) "
-        "VALUES (:1, :2, 'Pending') RETURNING order_id INTO :3",
-        [int(customer_id), int(user_id), order_id_var]
-    )
-    order_id = int(order_id_var.getvalue()[0])
-
+    order = Orders.objects.create(customer_id=customer_id, user_id=user_id, status='Pending')
     for item in items:
-        pid    = int(item['product_id'])
-        qty    = int(item['quantity'])
-        price  = float(item['unit_price'])
-        ssize  = item.get('selected_size')  or None
-        scolor = item.get('selected_color') or None
-
-        cursor.execute(
-            "INSERT INTO order_items "
-            "(order_id, product_id, quantity, unit_price, selected_size, selected_color) "
-            "VALUES (:1, :2, :3, :4, :5, :6)",
-            [order_id, pid, qty, price, ssize, scolor]
+        OrderItems.objects.create(
+            order=order,
+            product_id=int(item['product_id']),
+            quantity=int(item['quantity']),
+            unit_price=float(item['unit_price']),
+            selected_size=item.get('selected_size') or None,
+            selected_color=item.get('selected_color') or None,
         )
-
         if item.get('variant_id'):
-            cursor.execute(
-                "UPDATE product_variants SET stock_qty = stock_qty - :1 "
-                "WHERE variant_id = :2",
-                [qty, int(item['variant_id'])]
-            )
-
-    conn.commit()
-    cursor.close(); conn.close()
-    return order_id
+            variant = ProductVariants.objects.get(variant_id=int(item['variant_id']))
+            variant.stock_qty -= int(item['quantity'])
+            variant.save()
+    _recalc_order_total(order.order_id)
+    SalesLog.objects.create(order=order, user_id=user_id, action='ORDER_CREATED')
+    return order.order_id
 
 
 def update_order_status(order_id, status):
-    conn   = get_connection()
-    cursor = conn.cursor()
-    cursor.execute(
-        "UPDATE orders SET status=:1 WHERE order_id=:2",
-        [status, int(order_id)]
-    )
-    conn.commit()
-    cursor.close(); conn.close()
+    Orders.objects.filter(order_id=order_id).update(status=status)
 
-
-# ── Order Items ───────────────────────────────────────────────
 
 def get_order_items(order_id):
-    conn   = get_connection()
-    cursor = conn.cursor()
-    cursor.execute(
-        "SELECT oi.item_id, oi.product_id, p.product_name, p.image_url, "
-        "oi.quantity, oi.unit_price, "
-        "NVL(oi.selected_size,'—')  AS selected_size, "
-        "NVL(oi.selected_color,'—') AS selected_color, "
-        "(oi.quantity * oi.unit_price) AS subtotal "
-        "FROM order_items oi "
-        "JOIN products p ON oi.product_id = p.product_id "
-        "WHERE oi.order_id = :1 ORDER BY oi.item_id",
-        [int(order_id)]
-    )
-    rows = fetchall_as_dict(cursor)
-    cursor.close(); conn.close()
-    return rows
+    items = OrderItems.objects.filter(order_id=order_id).select_related('product').order_by('item_id')
+    result = []
+    for item in items:
+        result.append({
+            'ITEM_ID': item.item_id,
+            'PRODUCT_ID': item.product_id,
+            'PRODUCT_NAME': item.product.product_name,
+            'IMAGE_URL': item.product.image_url or '',
+            'QUANTITY': item.quantity,
+            'UNIT_PRICE': float(item.unit_price),
+            'SELECTED_SIZE': item.selected_size or '\u2014',
+            'SELECTED_COLOR': item.selected_color or '\u2014',
+            'SUBTOTAL': float(item.quantity * item.unit_price),
+        })
+    return result
 
-
-# ── Users ─────────────────────────────────────────────────────
 
 def get_all_users():
-    conn   = get_connection()
-    cursor = conn.cursor()
-    cursor.execute(
-        "SELECT user_id, username, role, "
-        "TO_CHAR(created_date,'YYYY-MM-DD') AS created_date "
-        "FROM users ORDER BY user_id ASC"
-    )
-    rows = fetchall_as_dict(cursor)
-    cursor.close(); conn.close()
-    return rows
+    users = Users.objects.all().order_by('user_id')
+    result = []
+    for u in users:
+        result.append({
+            'USER_ID': u.user_id,
+            'USERNAME': u.username,
+            'ROLE': u.role,
+            'CREATED_DATE': u.created_date.strftime('%Y-%m-%d') if u.created_date else '',
+        })
+    return result
 
 
 def update_user_role(user_id, new_role):
-    conn   = get_connection()
-    cursor = conn.cursor()
-    cursor.execute(
-        "UPDATE users SET role=:1 WHERE user_id=:2",
-        [new_role, int(user_id)]
-    )
-    conn.commit()
-    cursor.close(); conn.close()
+    Users.objects.filter(user_id=user_id).update(role=new_role)
 
 
 def delete_user(user_id):
-    conn   = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("DELETE FROM customers WHERE user_id=:1", [int(user_id)])
-    cursor.execute("DELETE FROM users    WHERE user_id=:1", [int(user_id)])
-    conn.commit()
-    cursor.close(); conn.close()
+    Customers.objects.filter(user_id=user_id).delete()
+    Users.objects.filter(user_id=user_id).delete()
 
-
-# ── Customers ─────────────────────────────────────────────────
 
 def search_customers(query):
-    conn   = get_connection()
-    cursor = conn.cursor()
     q = f'%{query}%'
-    cursor.execute(
-        "SELECT customer_id, full_name, email, phone, address "
-        "FROM customers "
-        "WHERE UPPER(full_name) LIKE UPPER(:1) "
-        "OR phone LIKE :2 "
-        "OR UPPER(email) LIKE UPPER(:3) "
-        "ORDER BY full_name",
-        [q, q, q]
-    )
-    rows = fetchall_as_dict(cursor)
-    cursor.close(); conn.close()
-    return rows
+    customers = Customers.objects.filter(
+        Q(full_name__icontains=query) |
+        Q(phone__icontains=query) |
+        Q(email__icontains=query)
+    ).order_by('full_name')
+    return list(customers.values(
+        'customer_id', 'full_name', 'email', 'phone', 'address'
+    ))
 
-
-# ── Sales Log ─────────────────────────────────────────────────
 
 def get_sales_log():
-    conn   = get_connection()
-    cursor = conn.cursor()
-    cursor.execute(
-        "SELECT sl.log_id, sl.order_id, u.username, sl.action, "
-        "TO_CHAR(sl.log_date,'YYYY-MM-DD HH24:MI') AS log_date "
-        "FROM sales_log sl LEFT JOIN users u ON sl.user_id = u.user_id "
-        "ORDER BY sl.log_date DESC"
-    )
-    rows = fetchall_as_dict(cursor)
-    cursor.close(); conn.close()
-    return rows
+    logs = SalesLog.objects.select_related('user', 'order').all().order_by('-log_id')
+    result = []
+    for log in logs:
+        result.append({
+            'LOG_ID': log.log_id,
+            'ORDER_ID': log.order.order_id if log.order else None,
+            'USERNAME': log.user.username if log.user else None,
+            'ACTION': log.action,
+            'LOG_DATE': log.log_date.strftime('%Y-%m-%d %H:%M') if log.log_date else '',
+        })
+    return result
 
-
-# ── Audit ─────────────────────────────────────────────────────────────────────
 
 def get_audit_report():
-    """Full audit: every order with staff, customer, and items detail."""
-    conn   = get_connection()
-    cursor = conn.cursor()
+    orders = Orders.objects.select_related('customer').all().order_by('-order_id')
+    order_list = []
+    for o in orders:
+        staff_name = None
+        log_entry = SalesLog.objects.filter(order=o, user__role__in=['Admin', 'Sale']).order_by('-log_id').first()
+        if log_entry and log_entry.user:
+            staff_name = log_entry.user.username
 
-    # Orders with staff and customer info
-    # staff_name = last Admin/Sale who processed status (from sales_log)
-    cursor.execute("""
-        SELECT
-            o.order_id,
-            (SELECT uname FROM (
-                SELECT u2.username AS uname
-                FROM sales_log sl
-                JOIN users u2 ON sl.user_id = u2.user_id
-                WHERE sl.order_id = o.order_id
-                AND u2.role IN ('Admin','Sale')
-                ORDER BY sl.log_id DESC
-            ) WHERE ROWNUM = 1)   AS staff_name,
-            'Staff'               AS staff_role,
-            c.full_name           AS customer_name,
-            c.phone               AS customer_phone,
-            TO_CHAR(o.order_date,'YYYY-MM-DD HH24:MI') AS order_date,
-            o.status,
-            NVL(o.total_amount,0) AS total_amount
-        FROM orders o
-        LEFT JOIN customers c ON o.customer_id = c.customer_id
-        ORDER BY o.order_id DESC
-    """)
-    orders = fetchall_as_dict(cursor)
+        items = OrderItems.objects.filter(order=o).select_related('product')
+        item_list = []
+        for item in items:
+            item_list.append({
+                'PRODUCT_NAME': item.product.product_name,
+                'CATEGORY': item.product.category,
+                'SELECTED_SIZE': item.selected_size or '\u2014',
+                'SELECTED_COLOR': item.selected_color or '\u2014',
+                'QUANTITY': item.quantity,
+                'UNIT_PRICE': float(item.unit_price),
+                'SUBTOTAL': float(item.quantity * item.unit_price),
+            })
 
-    # Order items for each order
-    cursor.execute("""
-        SELECT
-            oi.order_id,
-            p.product_name,
-            p.category,
-            NVL(oi.selected_size,  '—') AS selected_size,
-            NVL(oi.selected_color, '—') AS selected_color,
-            oi.quantity,
-            oi.unit_price,
-            (oi.quantity * oi.unit_price) AS subtotal
-        FROM order_items oi
-        JOIN products p ON oi.product_id = p.product_id
-        ORDER BY oi.order_id DESC, oi.item_id
-    """)
-    items = fetchall_as_dict(cursor)
+        logs = SalesLog.objects.filter(order=o).select_related('user').order_by('-log_date')
+        log_list = []
+        for log in logs:
+            log_list.append({
+                'CHANGED_BY': log.user.username if log.user else '',
+                'ACTION': log.action,
+                'LOG_DATE': log.log_date.strftime('%Y-%m-%d %H:%M') if log.log_date else '',
+            })
 
-    # Status change log
-    cursor.execute("""
-        SELECT
-            sl.order_id,
-            u.username  AS changed_by,
-            sl.action,
-            TO_CHAR(sl.log_date,'YYYY-MM-DD HH24:MI') AS log_date
-        FROM sales_log sl
-        LEFT JOIN users u ON sl.user_id = u.user_id
-        ORDER BY sl.log_date DESC
-    """)
-    logs = fetchall_as_dict(cursor)
-
-    cursor.close(); conn.close()
-
-    # Group items and logs by order_id
-    items_map = {}
-    for item in items:
-        oid = item['ORDER_ID']
-        if oid not in items_map:
-            items_map[oid] = []
-        items_map[oid].append(item)
-
-    logs_map = {}
-    for log in logs:
-        oid = log['ORDER_ID']
-        if oid not in logs_map:
-            logs_map[oid] = []
-        logs_map[oid].append(log)
-
-    for order in orders:
-        oid = order['ORDER_ID']
-        order['items'] = items_map.get(oid, [])
-        order['logs']  = logs_map.get(oid, [])
-
-    return orders
+        order_list.append({
+            'ORDER_ID': o.order_id,
+            'STAFF_NAME': staff_name,
+            'STAFF_ROLE': 'Staff' if staff_name else '',
+            'CUSTOMER_NAME': o.customer.full_name if o.customer else '',
+            'CUSTOMER_PHONE': o.customer.phone if o.customer else '',
+            'ORDER_DATE': o.order_date.strftime('%Y-%m-%d %H:%M') if o.order_date else '',
+            'STATUS': o.status,
+            'TOTAL_AMOUNT': float(o.total_amount) if o.total_amount else 0,
+            'items': item_list,
+            'logs': log_list,
+        })
+    return order_list
 
 
 def get_staff_performance():
-    """Summary: orders and revenue per staff member."""
-    conn   = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("""
-        SELECT
-            u.username,
-            u.role,
-            COUNT(o.order_id)                           AS total_orders,
-            SUM(CASE WHEN o.status != 'Cancelled'
-                     THEN NVL(o.total_amount,0) ELSE 0 END) AS total_revenue,
-            SUM(CASE WHEN o.status = 'Completed'
-                     THEN 1 ELSE 0 END)                 AS completed_orders,
-            SUM(CASE WHEN o.status = 'Cancelled'
-                     THEN 1 ELSE 0 END)                 AS cancelled_orders,
-            TO_CHAR(MAX(o.order_date),'YYYY-MM-DD')     AS last_order_date
-        FROM orders o
-        JOIN users u ON o.user_id = u.user_id
-        GROUP BY u.username, u.role
-        ORDER BY total_revenue DESC
-    """)
-    rows = fetchall_as_dict(cursor)
-    cursor.close(); conn.close()
-    return rows
+    results = (
+        Users.objects.filter(role__in=['Admin', 'Sale'])
+        .annotate(
+            total_orders=Count('orders', distinct=True),
+            completed_orders=Count(Case(
+                When(orders__status='Completed', then=1),
+                output_field=IntegerField(),
+                distinct=True,
+            )),
+            cancelled_orders=Count(Case(
+                When(orders__status='Cancelled', then=1),
+                output_field=IntegerField(),
+                distinct=True,
+            )),
+        )
+        .values('username', 'role', 'total_orders', 'completed_orders', 'cancelled_orders')
+    )
+
+    perf = []
+    for r in results:
+        orders = Orders.objects.filter(user__username=r['username'])
+        total_revenue = sum(
+            float(o.total_amount) for o in orders if o.status != 'Cancelled' and o.total_amount
+        )
+        last_order = orders.order_by('-order_date').first()
+        perf.append({
+            'USERNAME': r['username'],
+            'ROLE': r['role'],
+            'TOTAL_ORDERS': r['total_orders'],
+            'TOTAL_REVENUE': total_revenue,
+            'COMPLETED_ORDERS': r['completed_orders'],
+            'CANCELLED_ORDERS': r['cancelled_orders'],
+            'LAST_ORDER_DATE': last_order.order_date.strftime('%Y-%m-%d') if last_order and last_order.order_date else '',
+        })
+    return perf
 
 
 def create_user(username, password, full_name, email, phone, address, role):
-    conn   = get_connection()
-    cursor = conn.cursor()
-    user_id_var = cursor.var(oracledb.NUMBER)
-    cursor.execute(
-        "INSERT INTO users (username, password, role) "
-        "VALUES (:1, :2, :3) RETURNING user_id INTO :4",
-        [username, password, role, user_id_var]
+    if Users.objects.filter(username__iexact=username).exists():
+        raise Exception('Username already taken!')
+    user = Users.objects.create(username=username, password=password, role=role)
+    Customers.objects.create(
+        user=user,
+        full_name=full_name,
+        email=email or '',
+        phone=phone or '',
+        address=address or '',
     )
-    user_id = int(user_id_var.getvalue()[0])
-    cursor.execute(
-        "INSERT INTO customers (user_id, full_name, email, phone, address) "
-        "VALUES (:1, :2, :3, :4, :5)",
-        [user_id, full_name, email or '', phone or '', address or '']
-    )
-    conn.commit()
-    cursor.close(); conn.close()
-    return user_id
+    return user.user_id
 
 
 def log_status_change(order_id, user_id, status):
-    conn   = get_connection()
-    cursor = conn.cursor()
-    try:
-        cursor.execute(
-            "INSERT INTO sales_log (order_id, user_id, action, log_date) "
-            "VALUES (:1, :2, :3, SYSDATE)",
-            [int(order_id), int(user_id), f'STATUS_{status.upper()}']
-        )
-        conn.commit()
-    except Exception as e:
-        print("log error:", str(e))
-    cursor.close(); conn.close()
+    SalesLog.objects.create(
+        order_id=order_id,
+        user_id=user_id,
+        action=f'STATUS_{status.upper()}',
+    )
 
-def hash_password(raw_password: str) -> str:
-    """Hash a plain password using Django's PBKDF2 hasher."""
+
+def _recalc_order_total(order_id):
+    total = OrderItems.objects.filter(order_id=order_id).aggregate(
+        total=Sum(Sum('quantity') * Sum('unit_price'))
+    )
+    items = OrderItems.objects.filter(order_id=order_id)
+    total_amount = sum(float(item.quantity * item.unit_price) for item in items)
+    Orders.objects.filter(order_id=order_id).update(total_amount=total_amount)
+
+
+def hash_password(raw_password):
     return make_password(raw_password)
 
 
-def verify_password(raw_password: str, hashed_password: str) -> bool:
-    """Check a plain password against a stored hash."""
+def verify_password(raw_password, hashed_password):
     return check_password(raw_password, hashed_password)
 
 
 def format_currency(amount, currency='USD'):
-    """Format a number as currency (basic version)."""
     if amount is None:
         return ''
     try:

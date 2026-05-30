@@ -52,19 +52,7 @@ class LoginView(APIView):
         if not user:
             return Response({'error': 'Invalid username or password'}, status=401)
 
-        # Get customer_id for Customer role
-        customer_id = None
-        if user['ROLE'] == 'Customer':
-            conn   = utils.get_connection()
-            cursor = conn.cursor()
-            cursor.execute(
-                "SELECT customer_id FROM customers WHERE user_id = :id",
-                {'id': user['USER_ID']}
-            )
-            row = cursor.fetchone()
-            cursor.close(); conn.close()
-            if row:
-                customer_id = row[0]
+        customer_id = utils.get_customer_id_by_user_id(user['USER_ID']) if user['ROLE'] == 'Customer' else None
 
         token = make_token(user)
         return Response({
@@ -169,7 +157,7 @@ class ProductVariantsView(APIView):
         d = request.data
         try:
             utils.add_variant(
-                product_id, d.get('size_'), d.get('color'), d.get('stock_qty', 0)
+                product_id, d.get('size'), d.get('color'), d.get('stock_qty', 0)
             )
             return Response({'message': 'Variant added'}, status=201)
         except Exception as e:
@@ -185,7 +173,7 @@ class VariantDetailView(APIView):
         d = request.data
         try:
             utils.update_variant(
-                variant_id, d.get('size_'), d.get('color'), d.get('stock_qty', 0)
+                variant_id, d.get('size'), d.get('color'), d.get('stock_qty', 0)
             )
             return Response({'message': 'Variant updated'})
         except Exception as e:
@@ -245,17 +233,10 @@ class OrdersView(APIView):
             return Response({'error': 'Not authenticated'}, status=401)
         if payload.get('role') in ('Admin', 'Sale'):
             return Response(utils.get_all_orders())
-        conn   = utils.get_connection()
-        cursor = conn.cursor()
-        cursor.execute(
-            "SELECT customer_id FROM customers WHERE user_id = :id",
-            {'id': payload['user_id']}
-        )
-        row = cursor.fetchone()
-        cursor.close(); conn.close()
-        if not row:
+        cid = utils.get_customer_id_by_user_id(payload['user_id'])
+        if not cid:
             return Response([])
-        return Response(utils.get_customer_orders(row[0]))
+        return Response(utils.get_customer_orders(cid))
 
     def post(self, request):
         """All logged-in users can place orders."""
@@ -353,66 +334,62 @@ class CustomerSearchView(APIView):
 
 import json
 from datetime import datetime as dt
+from .models import Users, Products, Customers, Orders, OrderItems, SalesLog, ProductVariants
 
 class BackupView(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request):
-        """Admin only — get table row counts for backup preview."""
         payload, err = require_roles('Admin')(request)
         if err: return err
-        conn   = utils.get_connection()
-        cursor = conn.cursor()
-        tables = ['users','customers','products','product_variants',
-                  'orders','order_items','sales_log']
-        stats  = []
-        for t in tables:
+        from django.apps import apps
+        models_map = {
+            'users': 'Users', 'customers': 'Customers', 'products': 'Products',
+            'product_variants': 'ProductVariants', 'orders': 'Orders',
+            'order_items': 'OrderItems', 'sales_log': 'SalesLog',
+        }
+        stats = []
+        for table, model_name in models_map.items():
             try:
-                cursor.execute(f"SELECT COUNT(*) FROM {t}")
-                stats.append({'table': t.upper(), 'rows': cursor.fetchone()[0]})
+                model = apps.get_model('store', model_name)
+                stats.append({'table': table.upper(), 'rows': model.objects.count()})
             except Exception as e:
-                stats.append({'table': t.upper(), 'rows': 0, 'error': str(e)})
-        cursor.close(); conn.close()
+                stats.append({'table': table.upper(), 'rows': 0, 'error': str(e)})
         return Response({'tables': stats,
                          'timestamp': dt.now().strftime('%Y-%m-%d %H:%M:%S')})
 
     def post(self, request):
-        """Admin only — generate full backup and return as downloadable file."""
         payload, err = require_roles('Admin')(request)
         if err: return err
 
         backup_type = request.data.get('type', 'sql')
-        conn        = utils.get_connection()
-        cursor      = conn.cursor()
-
-        tables = {
-            'users':            ['USER_ID','USERNAME','PASSWORD','ROLE','CREATED_DATE'],
-            'customers':        ['CUSTOMER_ID','USER_ID','FULL_NAME','EMAIL','PHONE','ADDRESS','CREATED_DATE'],
-            'products':         ['PRODUCT_ID','PRODUCT_NAME','CATEGORY','PRICE','STOCK_QTY','IMAGE_URL'],
-            'product_variants': ['VARIANT_ID','PRODUCT_ID','SIZE_','COLOR','STOCK_QTY'],
-            'orders':           ['ORDER_ID','CUSTOMER_ID','USER_ID','ORDER_DATE','STATUS','TOTAL_AMOUNT'],
-            'order_items':      ['ITEM_ID','ORDER_ID','PRODUCT_ID','QUANTITY','UNIT_PRICE','SELECTED_SIZE','SELECTED_COLOR'],
-            'sales_log':        ['LOG_ID','ORDER_ID','USER_ID','ACTION','LOG_DATE'],
-        }
-
         now_str = dt.now().strftime('%Y%m%d_%H%M%S')
 
+        def serialize(obj):
+            if hasattr(obj, 'isoformat'):
+                return obj.isoformat()
+            return str(obj) if obj is not None else None
+
+        tables_data = {
+            'users': list(Users.objects.all().values()),
+            'customers': list(Customers.objects.all().values()),
+            'products': list(Products.objects.all().values()),
+            'product_variants': list(ProductVariants.objects.all().values()),
+            'orders': list(Orders.objects.all().values()),
+            'order_items': list(OrderItems.objects.all().values()),
+            'sales_log': list(SalesLog.objects.all().values()),
+        }
+
         if backup_type == 'json':
-            data = {'backup_info': {'created_at': dt.now().strftime('%Y-%m-%d %H:%M:%S'),
-                                    'database': "Men's Clothing Store",
-                                    'type': 'Full JSON Backup'}, 'data': {}}
-            for table, cols in tables.items():
-                try:
-                    cursor.execute(f"SELECT {','.join(cols)} FROM {table}")
-                    rows = []
-                    for row in cursor.fetchall():
-                        rows.append({cols[i]: (str(row[i]) if row[i] is not None else None)
-                                     for i in range(len(cols))})
-                    data['data'][table] = rows
-                except Exception as e:
-                    data['data'][table] = {'error': str(e)}
-            cursor.close(); conn.close()
-            content  = json.dumps(data, indent=2, ensure_ascii=False)
+            data = {
+                'backup_info': {
+                    'created_at': dt.now().strftime('%Y-%m-%d %H:%M:%S'),
+                    'database': "Men's Clothing Store",
+                    'type': 'Full JSON Backup',
+                },
+                'data': tables_data,
+            }
+            content = json.dumps(data, indent=2, ensure_ascii=False, default=serialize)
             filename = f"mens_store_backup_{now_str}.json"
         else:
             lines = [
@@ -421,33 +398,30 @@ class BackupView(APIView):
                 f"-- Generated: {dt.now().strftime('%Y-%m-%d %H:%M:%S')}",
                 '-- ============================================================', ''
             ]
-            for table, cols in tables.items():
+            for table, rows in tables_data.items():
                 lines.append(f"-- Table: {table.upper()}")
-                try:
-                    cursor.execute(f"SELECT {','.join(cols)} FROM {table} ORDER BY 1")
-                    rows = cursor.fetchall()
+                if rows:
+                    cols = list(rows[0].keys())
                     for row in rows:
                         vals = []
-                        for v in row:
+                        for col in cols:
+                            v = row[col]
                             if v is None:
                                 vals.append('NULL')
-                            elif isinstance(v, str):
-                                vals.append("'" + v.replace("'","''") + "'")
-                            else:
+                            elif isinstance(v, (int, float)):
                                 vals.append(str(v))
+                            else:
+                                vals.append("'" + str(v).replace("'", "''") + "'")
                         lines.append(f"INSERT INTO {table} ({','.join(cols)}) VALUES ({','.join(vals)});")
                     lines.append(f"-- {len(rows)} rows inserted")
-                except Exception as e:
-                    lines.append(f"-- ERROR: {str(e)}")
                 lines.append('')
             lines.append('COMMIT;')
-            cursor.close(); conn.close()
-            content  = '\n'.join(lines)
+            content = '\n'.join(lines)
             filename = f"mens_store_backup_{now_str}.sql"
 
         from django.http import HttpResponse
         resp = HttpResponse(content, content_type='text/plain; charset=utf-8')
-        resp['Content-Disposition']         = f'attachment; filename="{filename}"'
+        resp['Content-Disposition'] = f'attachment; filename="{filename}"'
         resp['Access-Control-Expose-Headers'] = 'Content-Disposition'
         return resp
 

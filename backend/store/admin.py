@@ -1,12 +1,7 @@
 from django.contrib import admin
 from .models import (
-    Users,
-    Products,
-    Customers,
-    Orders,
-    OrderItems,
-    SalesLog,
-    ProductVariants,
+    Users, Products, Customers, Orders,
+    OrderItems, SalesLog, ProductVariants,
 )
 
 
@@ -19,8 +14,8 @@ class UsersAdmin(admin.ModelAdmin):
 
 @admin.register(Products)
 class ProductsAdmin(admin.ModelAdmin):
-    list_display = ("product_id", "name", "category", "size", "color", "price", "stock_qty")
-    search_fields = ("name", "category", "color")
+    list_display = ("product_id", "product_name", "category", "size", "color", "price", "stock_qty")
+    search_fields = ("product_name", "category", "color")
     list_filter = ("category", "size", "color")
 
 
@@ -40,7 +35,7 @@ class OrdersAdmin(admin.ModelAdmin):
 @admin.register(OrderItems)
 class OrderItemsAdmin(admin.ModelAdmin):
     list_display = ("item_id", "order", "product", "quantity", "unit_price", "selected_size", "selected_color")
-    search_fields = ("product__name",)
+    search_fields = ("product__product_name",)
 
 
 @admin.register(SalesLog)
@@ -52,6 +47,6 @@ class SalesLogAdmin(admin.ModelAdmin):
 
 @admin.register(ProductVariants)
 class ProductVariantsAdmin(admin.ModelAdmin):
-    list_display = ("variant_id", "product", "size", "color", "stock")
-    search_fields = ("product__name", "size", "color")
+    list_display = ("variant_id", "product", "size", "color", "stock_qty")
+    search_fields = ("product__product_name", "size", "color")
     list_filter = ("size", "color")
