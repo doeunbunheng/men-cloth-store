@@ -12,7 +12,6 @@ const PLACEHOLDER = 'https://placehold.co/400x300?text=No+Image'
 
 const imgSrc = (url) => {
     if (!url) return null
-    if (url.startsWith('/media')) return `http://localhost:8000${url}`
     return url
 }
 

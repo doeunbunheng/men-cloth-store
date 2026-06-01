@@ -4,7 +4,6 @@ import { getProducts, getVariants } from '../../api'
 
 const imgSrc = (url) => {
     if (!url) return null
-    if (url.startsWith('/media')) return `http://localhost:8000${url}`
     return url
 }
 

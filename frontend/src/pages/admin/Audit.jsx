@@ -10,7 +10,7 @@ const STATUS_STYLE = {
     Cancelled: { bg:'#fef2f2', color:'#b91c1c', dot:'#ef4444' },
 }
 
-const imgSrc = url => url ? (url.startsWith('/media') ? `http://localhost:8000${url}` : url) : null
+const imgSrc = url => url || null
 
 // ── Order Detail Modal ────────────────────────────────────────
 function OrderDetailModal({ order, onClose }) {
