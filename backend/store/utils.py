@@ -56,10 +56,19 @@ def register_customer(username, password, full_name, email, phone, address):
 
 
 def get_all_products():
-    return list(Products.objects.all().order_by('stock_qty').values(
-        'product_id', 'product_name', 'category',
-        'size', 'color', 'price', 'stock_qty', 'image_url'
-    ))
+    return [
+        {
+            'PRODUCT_ID': p.product_id,
+            'PRODUCT_NAME': p.product_name,
+            'CATEGORY': p.category,
+            'SIZE_': p.size,
+            'COLOR': p.color,
+            'PRICE': float(p.price),
+            'STOCK_QTY': p.stock_qty,
+            'IMAGE_URL': p.image_url or '',
+        }
+        for p in Products.objects.all().order_by('stock_qty')
+    ]
 
 
 def add_product(name, category, price, image_url=None):
@@ -87,9 +96,16 @@ def delete_product(product_id):
 
 
 def get_variants(product_id):
-    return list(ProductVariants.objects.filter(product_id=product_id).order_by('variant_id').values(
-        'variant_id', 'product_id', 'size', 'color', 'stock_qty'
-    ))
+    return [
+        {
+            'VARIANT_ID': v.variant_id,
+            'PRODUCT_ID': v.product_id,
+            'SIZE_': v.size,
+            'COLOR': v.color,
+            'STOCK_QTY': v.stock_qty,
+        }
+        for v in ProductVariants.objects.filter(product_id=product_id).order_by('variant_id')
+    ]
 
 
 def add_variant(product_id, size, color, stock_qty):

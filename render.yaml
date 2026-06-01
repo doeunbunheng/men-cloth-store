@@ -7,7 +7,7 @@ services:
     region: singapore
     rootDir: backend
     buildCommand: pip install -r requirements.txt && python manage.py collectstatic --noinput
-    startCommand: gunicorn mens_store.wsgi --bind 0.0.0.0:$PORT
+    startCommand: python manage.py migrate && python manage.py seed_data && gunicorn mens_store.wsgi --bind 0.0.0.0:$PORT
     envVars:
       - key: SECRET_KEY
         generateValue: true
