@@ -1,0 +1,26 @@
+services:
+  - type: web
+    name: men-cloth-store
+    runtime: python
+    repo: https://github.com/doeunbunheng/men-cloth-store
+    plan: free
+    region: singapore
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt && python manage.py collectstatic --noinput
+    startCommand: gunicorn mens_store.wsgi --bind 0.0.0.0:$PORT
+    envVars:
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DEBUG
+        value: "False"
+      - key: PYTHON_VERSION
+        value: "3.12.9"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: men-cloth-store-db
+          property: connectionString
+
+databases:
+  - name: men-cloth-store-db
+    plan: free
+    region: singapore
